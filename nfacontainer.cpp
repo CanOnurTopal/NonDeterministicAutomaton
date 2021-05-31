@@ -7,7 +7,7 @@ namespace NFA {
     namespace container {
 
         template<typename alphabet, size_t msy, size_t mst>
-        NFAContainer<alphabet, msy, mst>::NFAContainer(state_id initial_state_size):
+        NFAContainer<alphabet, msy, mst>::NFAContainer(size_t initial_state_size):
             state_map_(initial_state_size)
         {
             symbols_ptr_ = std::make_shared<std::vector<symbol_id>>();
@@ -106,6 +106,20 @@ namespace NFA {
         } //Share pointer to same input
 
         template<typename alphabet, size_t msy, size_t mst>
+        NFAContainer<alphabet, msy, mst> NFAContainer<alphabet, msy, mst>::get_copy() const{
+            return NFAContainer(*this);
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        NFAContainer<alphabet, msy, mst> NFAContainer<alphabet, msy, mst>::get_linked_copy() const{
+            NFAContainer new_NFA(0);
+            new_NFA.state_map_ = state_map_;
+            new_NFA.symbols_ptr_ = symbols_ptr_;
+            if (current_states_.size() > 0) new_NFA.current_states_ = current_states_;
+            return new_NFA;
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
         InputLink<typename NFAContainer<alphabet, msy, mst>::symbol_id> NFAContainer<alphabet, msy, mst>::get_inputs() const{
             return InputLink(symbols_ptr_);
         } //Retrieve InputLink memento of the symbols
@@ -130,6 +144,25 @@ namespace NFA {
         std::vector<typename NFAContainer<alphabet, msy, mst>::state_id> NFAContainer<alphabet, msy, mst>::get_states() const{
             return current_states_;
         }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        void NFAContainer<alphabet, msy, mst>::clear_states(){
+            current_states_.clear();
+            return;
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        void NFAContainer<alphabet, msy, mst>::clear_inputs(){
+            symbols_ptr_->clear();
+            return;
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        void NFAContainer<alphabet, msy, mst>::break_links(){
+            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(*symbols_ptr_);
+            return;
+        }
+
 
         //Evaluate
         template<typename alphabet, size_t msy, size_t mst>

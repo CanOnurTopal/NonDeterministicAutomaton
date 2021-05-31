@@ -25,7 +25,7 @@ namespace NFA {
                 using state_id = typename state::StateMap<alphabet,max_symbol,max_state>::state_id; //numeric type
 
                 //Constructors
-                NFAContainer(state_id initial_state_size = 0);
+                NFAContainer(size_t initial_state_size = 0);
                 NFAContainer(const NFAContainer&);
                 NFAContainer(NFAContainer&&);
 
@@ -54,13 +54,19 @@ namespace NFA {
                 //get symbols
                 InputLink<symbol_id> get_inputs() const; //Get a memento of inputs
 
-
+                //get copy
+                NFAContainer get_copy() const;
+                NFAContainer get_linked_copy() const;
 
                 //Query
-                size_t size() const;
+                size_t size() const; // amount of states
                 bool is_accept() const;
                 state_id get_start_state() const;
                 std::vector<state_id> get_states() const;
+
+                //clear
+                void clear_states();
+                void clear_inputs();
 
                 //Evaluate
                 void evaluate();
