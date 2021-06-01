@@ -7,6 +7,8 @@
 
 void test(NFA::NFA<char, 5, 5>& machine){
     machine.evaluate();
+    machine.evaluate();
+    machine.evaluate();
 }
 
 NFA::NFA<char, 5, 5> get_machine(){
@@ -27,7 +29,7 @@ NFA::NFA<char, 5, 5> get_machine(){
     machine.add_transition(q2, q2,0);
 
     for (int i = 0; i<1000000; ++i){
-        machine.input_symbols(0,1,2,-1,1,0,1,2,-1,1);
+        machine.input_symbols(0,2,-1,1,0,1,2,-1,1);
         /*
         machine.input(0);
         machine.input(1);

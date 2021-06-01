@@ -1,21 +1,27 @@
 #ifndef NFACONTAINER_H
 #define NFACONTAINER_H
 #include "statemap.h"
+#include <variant>
 #include <ostream>
 namespace NFA {
+
+    enum class special_symbol{
+        EPSILON,
+        STOP
+    };
+
     namespace container {
         template<typename alphabet, size_t max_symbol = 0, size_t max_state = 0>
         class NFAContainer;
 
         template<typename symbol_id>
-        class InputLink{
-            private:
-                InputLink(std::shared_ptr<std::vector<symbol_id>>& symbols);
-                std::shared_ptr<std::vector<symbol_id>> symbols_ptr_;
-        };
+        class InputLink;
 
         template<typename alphabet, size_t msy = 0, size_t mst = 0>
         std::ostream& operator<<(std::ostream& os, NFAContainer<alphabet, msy, mst> const& nfa);
+
+        template<typename symbol_id>
+        using cached_symbol = std::variant<symbol_id, special_symbol>;
 
         template<typename alphabet, size_t max_symbol, size_t max_state>
         class NFAContainer
@@ -42,6 +48,8 @@ namespace NFA {
                 //Insert symbols
                 template<typename... Args>
                 void input_symbols(const alphabet&, Args...);
+                template<typename... Args>
+                void input_symbols(special_symbol, Args...);
                 template<typename Iterator>
                 void input_iterator(Iterator iter_start, Iterator iter_end);
 
@@ -66,19 +74,37 @@ namespace NFA {
 
                 //clear
                 void clear_states();
-                void clear_inputs();
+                void clear_inputs(); // does not break linked inputs
+                
+                //Break input links with other NFAcontainers
+                void break_links();
 
                 //Evaluate
-                void evaluate();
+                bool evaluate();
 
 
             private:
-                void eval_symbol(symbol_id);
-
                 state::StateMap<alphabet,max_symbol,max_state> state_map_;
-                std::shared_ptr<std::vector<symbol_id>> symbols_ptr_;
+                std::shared_ptr<std::vector<cached_symbol<symbol_id>>> symbols_ptr_;
                 std::vector<state_id> current_states_;
+                size_t current_input_;
+
+                bool eval_(cached_symbol<symbol_id>&);
+
+                template<typename state_container> size_t eval_special(special_symbol, state_container&);
+                template<typename state_container> size_t eval_symbol(symbol_id, state_container&);
+                template<typename state_container> size_t eval_epsilon(state_container&);
+
+
                 friend std::ostream& operator<<<alphabet, max_symbol, max_state>(std::ostream& os, const NFAContainer& nfa);
+
+        };
+
+        template<typename symbol_id>
+        class InputLink{
+            private:
+                InputLink(std::shared_ptr<std::vector<cached_symbol<symbol_id>>>& symbols);
+                std::shared_ptr<std::vector<symbol_id>> symbols_ptr_;
         };
 
 

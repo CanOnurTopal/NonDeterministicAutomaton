@@ -8,33 +8,38 @@ namespace NFA {
 
         template<typename alphabet, size_t msy, size_t mst>
         NFAContainer<alphabet, msy, mst>::NFAContainer(size_t initial_state_size):
-            state_map_(initial_state_size)
+            state_map_(initial_state_size),
+            current_input_(0)
         {
-            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>();
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
         }
 
         template<typename alphabet, size_t msy, size_t mst>
         NFAContainer<alphabet, msy, mst>::NFAContainer(const NFAContainer& other):
-            state_map_(other.state_map_), current_states_(other.current_states_)
+            state_map_(other.state_map_),
+            current_states_(other.current_states_),
+            current_input_(0)
         {
-            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(other.symbols_ptr_);
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(other.symbols_ptr_);
         }
 
         template<typename alphabet, size_t msy, size_t mst>
         NFAContainer<alphabet, msy, mst>::NFAContainer(NFAContainer&& other):
             state_map_(std::move(other.state_map_)),
             symbols_ptr_(std::move(other.symbols_ptr_)),
-            current_states_(std::move(other.current_states_))
+            current_states_(std::move(other.current_states_)),
+            current_input_(other.current_input_)
         {
-            other.symbols_ptr_ = std::make_shared<std::vector<symbol_id>>();
+            other.symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
         }
 
         template<typename alphabet, size_t msy, size_t mst>
         NFAContainer<alphabet, msy, mst>& NFAContainer<alphabet, msy, mst>::operator=(const NFAContainer& other){
             if (this != &other){
                 state_map_ = other.state_map_;
-                symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(other.symbols_ptr_);
+                symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(other.symbols_ptr_);
                 current_states_ = other.current_states_;
+                current_input_ = other.current_input_;
             }
             return *this;
         }
@@ -44,8 +49,9 @@ namespace NFA {
             if (this != &other){
                 state_map_ = std::move(other.state_map_);
                 symbols_ptr_ = std::move(other.symbols_ptr_);
-                other.symbols_ptr_ = std::make_shared<std::vector<symbol_id>>();
+                other.symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
                 current_states_ = std::move(other.current_states_);
+                current_input_ = other.current_input_;
             }
             return *this;
         }
@@ -72,8 +78,16 @@ namespace NFA {
         template<typename alphabet, size_t msy, size_t mst>
         template<typename... Args>
         void NFAContainer<alphabet, msy, mst>::input_symbols(const alphabet& symbol, Args... args){
-            symbol_id id = state_map_.get_symbol_id(symbol);
+            cached_symbol<symbol_id> id = state_map_.get_symbol_id(symbol);
             symbols_ptr_->push_back(id);
+            if constexpr (sizeof... (args) != 0) return input_symbols(args...);
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        template<typename... Args>
+        void NFAContainer<alphabet, msy, mst>::input_symbols(special_symbol symbol, Args... args){
+            cached_symbol<symbol_id> special = symbol;
+            symbols_ptr_->push_back(special);
             if constexpr (sizeof... (args) != 0) return input_symbols(args...);
         }
 
@@ -81,18 +95,18 @@ namespace NFA {
         template<typename Iterator>
         void NFAContainer<alphabet, msy, mst>::input_iterator(Iterator iter_start, Iterator iter_end){
             while (iter_start != iter_end){
-                input(*(iter_start++));
+                input_symbols(*(iter_start++));
             }
         }
 
         template<typename alphabet, size_t msy, size_t mst>
         void NFAContainer<alphabet, msy, mst>::copy_input(const NFAContainer& other){
-            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(*(other.symbols_ptr_));
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(*(other.symbols_ptr_));
         } //Copy input from another container
 
         template<typename alphabet, size_t msy, size_t mst>
         void NFAContainer<alphabet, msy, mst>::copy_input(const InputLink<symbol_id>& other){
-            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(*(other.symbols_ptr_));
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(*(other.symbols_ptr_));
         } //Copy input from InputLink
 
         template<typename alphabet, size_t msy, size_t mst>
@@ -157,26 +171,60 @@ namespace NFA {
             return;
         }
 
+        // break_links
         template<typename alphabet, size_t msy, size_t mst>
         void NFAContainer<alphabet, msy, mst>::break_links(){
-            symbols_ptr_ = std::make_shared<std::vector<symbol_id>>(*symbols_ptr_);
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(*symbols_ptr_);
             return;
         }
 
 
         //Evaluate
-        template<typename alphabet, size_t msy, size_t mst>
-        void NFAContainer<alphabet, msy, mst>::evaluate(){
+        template<typename alphabet, size_t msy, size_t mst> //Comeback TODO
+        bool NFAContainer<alphabet, msy, mst>::evaluate(){
+            if (current_input_ >= symbols_ptr_->size()) return false;
             if (current_states_.empty()) current_states_.push_back(get_start_state());
-            for (symbol_id symbol: *symbols_ptr_){
-                eval_symbol(symbol);
+            bool resume = true;
+            size_t symbol_size = symbols_ptr_->size();
+            while (resume && current_input_ < symbol_size){
+                resume = eval_(symbols_ptr_->operator[](current_input_));
+                ++current_input_;
             }
-
+            return true;
         }
 
         template<typename alphabet, size_t msy, size_t mst>
-        void NFAContainer<alphabet, msy, mst>::eval_symbol(symbol_id symbol){ //will replace init states
+        bool NFAContainer<alphabet, msy, mst>::eval_(cached_symbol<symbol_id>& symbol){
             std::vector<std::vector<state_id>const *> next_states;
+            size_t next_states_size;
+            auto symbol_contains = symbol.index();
+            switch (symbol_contains) {
+                case 0: //Contains symbol_id
+                    next_states_size = eval_symbol(std::get<0>(symbol), next_states);
+                    break;
+                case 1: //Contains special symbol
+                    special_symbol special = std::get<1>(symbol);
+                    switch (special) {
+                        case special_symbol::STOP:
+                            return false;
+                        case special_symbol::EPSILON:
+                            next_states_size = eval_epsilon(next_states);
+                            break;}
+                    break;
+            }
+            current_states_.resize(next_states_size);
+            auto current_states_iter = current_states_.begin();
+            for (auto& item: next_states){
+                auto item_size = item->size();
+                std::move(item->begin(),item->end(), current_states_iter);
+                std::advance(current_states_iter, item_size);
+            }
+            return true;
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        template<typename state_container>
+        size_t NFAContainer<alphabet, msy, mst>::eval_symbol(symbol_id symbol, state_container& next_states ){ //will replace init states
             next_states.reserve(current_states_.size() * 2);
             size_t next_states_size = 0;
             std::vector<state_id> const* next;
@@ -190,34 +238,26 @@ namespace NFA {
                 next_states.push_back(next);
                 next_states_size += next->size();
             }
-            current_states_.resize(next_states_size);
-            auto current_states_iter = current_states_.begin();
-            for (auto& item: next_states){
-                auto item_size = item->size();
-                std::move(item->begin(),item->end(), current_states_iter);
-                std::advance(current_states_iter, item_size);
-            }
+            return next_states_size;
         }
 
-        /*
         template<typename alphabet, size_t msy, size_t mst>
-        void NFAContainer<alphabet, msy, mst>::eval_symbol(symbol_id symbol){ //will replace init states
-            std::vector<std::vector<state_id>> next_states;
-            next_states.reserve(current_states_.size() * 2);
+        template<typename state_container>
+        size_t NFAContainer<alphabet, msy, mst>::eval_epsilon(state_container& next_states){ //process epsilons
+            next_states.reserve(current_states_.size());
+            size_t next_states_size = 0;
+            std::vector<state_id> const* next;
             for(auto oldstate : current_states_){
-                if (oldstate != state_map_.NULL_SYMBOL_ID) next_states.push_back(state_map_.get_transitions(oldstate,symbol));
-                next_states.push_back(state_map_.get_epsilon(oldstate));
+                next = &(state_map_.get_epsilon(oldstate));
+                next_states.push_back(next);
+                next_states_size += next->size();
             }
-            current_states_.clear();
-            for (auto& item: next_states){
-                std::move(item.begin(),item.end(), std::back_inserter(current_states_));
-            }
+            return next_states_size;
         }
-        */
 
         //InputLink
         template<typename symbol_id>
-        InputLink<symbol_id>::InputLink(std::shared_ptr<std::vector<symbol_id>>& symbols):symbols_ptr_(symbols){}
+        InputLink<symbol_id>::InputLink(std::shared_ptr<std::vector<cached_symbol<symbol_id>>>& symbols):symbols_ptr_(symbols){}
 
         //ostream <<
         template<typename alphabet, size_t msy, size_t mst>
