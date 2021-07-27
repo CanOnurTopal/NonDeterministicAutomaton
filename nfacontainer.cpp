@@ -22,7 +22,7 @@ namespace NFA {
             current_input_(other.current_input_),
             max_parallel_states_(other.max_parallel_states_)
         {
-            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(other.symbols_ptr_);
+            symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(*other.symbols_ptr_);
         }
 
         template<typename alphabet, size_t msy, size_t mst>
