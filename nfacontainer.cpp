@@ -9,7 +9,8 @@ namespace NFA {
         template<typename alphabet, size_t msy, size_t mst>
         NFAContainer<alphabet, msy, mst>::NFAContainer(size_t initial_state_size):
             state_map_(initial_state_size),
-            current_input_(0)
+            current_input_(0),
+            max_parallel_states_(0)
         {
             symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
         }
@@ -18,7 +19,8 @@ namespace NFA {
         NFAContainer<alphabet, msy, mst>::NFAContainer(const NFAContainer& other):
             state_map_(other.state_map_),
             current_states_(other.current_states_),
-            current_input_(0)
+            current_input_(other.current_input_),
+            max_parallel_states_(other.max_parallel_states_)
         {
             symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(other.symbols_ptr_);
         }
@@ -28,7 +30,8 @@ namespace NFA {
             state_map_(std::move(other.state_map_)),
             symbols_ptr_(std::move(other.symbols_ptr_)),
             current_states_(std::move(other.current_states_)),
-            current_input_(other.current_input_)
+            current_input_(other.current_input_),
+            max_parallel_states_(other.max_parallel_states_)
         {
             other.symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
         }
@@ -40,6 +43,7 @@ namespace NFA {
                 symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>(other.symbols_ptr_);
                 current_states_ = other.current_states_;
                 current_input_ = other.current_input_;
+                max_parallel_states_ = other.max_parallel_states_;
             }
             return *this;
         }
@@ -52,6 +56,7 @@ namespace NFA {
                 other.symbols_ptr_ = std::make_shared<std::vector<cached_symbol<symbol_id>>>();
                 current_states_ = std::move(other.current_states_);
                 current_input_ = other.current_input_;
+                max_parallel_states_ = other.max_parallel_states_;
             }
             return *this;
         }
@@ -187,6 +192,7 @@ namespace NFA {
             bool resume = true;
             size_t symbol_size = symbols_ptr_->size();
             while (resume && current_input_ < symbol_size){
+                if (max_parallel_states_ != 0 && current_states_.size() > max_parallel_states_) return false;
                 resume = eval_(symbols_ptr_->operator[](current_input_));
                 ++current_input_;
             }
@@ -220,6 +226,11 @@ namespace NFA {
                 std::advance(current_states_iter, item_size);
             }
             return true;
+        }
+
+        template<typename alphabet, size_t msy, size_t mst>
+        void NFAContainer<alphabet, msy, mst>::set_max_parallel_states(size_t val){
+           max_parallel_states_ = val;
         }
 
         template<typename alphabet, size_t msy, size_t mst>

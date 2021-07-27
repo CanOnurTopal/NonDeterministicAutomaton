@@ -82,12 +82,16 @@ namespace NFA {
                 //Evaluate
                 bool evaluate();
 
+                //set parallel states_
+                void set_max_parallel_states(size_t);
+
 
             private:
                 state::StateMap<alphabet,max_symbol,max_state> state_map_;
                 std::shared_ptr<std::vector<cached_symbol<symbol_id>>> symbols_ptr_;
                 std::vector<state_id> current_states_;
                 size_t current_input_;
+                size_t max_parallel_states_;
 
                 bool eval_(cached_symbol<symbol_id>&);
 
